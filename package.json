@@ -1,0 +1,1 @@
+{"name":"novaworks-crm","version":"1.0.0","scripts":{"start":"node server/index.js","seed":"node server/seed.js","reset":"node server/reset.js"},"dependencies":{"bcryptjs":"^2.4.3","dotenv":"^16.4.5","express":"^4.19.2","express-session":"^1.18.0"}}

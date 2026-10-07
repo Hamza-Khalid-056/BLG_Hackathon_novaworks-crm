@@ -1,0 +1,51 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NovaWorks CRM</title>
+<style>
+:root{--ink:#14232b;--mut:#5d6f78;--line:#d9e1e4;--bg:#f3f6f7;--acc:#0b6e69;--err:#a4262c;--ok:#1f6b3a}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+header{display:flex;gap:20px;align-items:center;padding:12px 24px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+header b{font-size:17px;color:var(--acc)}nav{display:flex;gap:4px;flex:1}nav a{padding:6px 12px;border-radius:6px;color:var(--ink);text-decoration:none}nav a.on{background:var(--acc);color:#fff}
+main{max-width:1100px;margin:24px auto;padding:0 24px}h2{margin:0 0 16px}.mut{color:var(--mut);margin:2px 0}.err{color:var(--err)}.ok{color:var(--ok)}.note{color:var(--acc)}
+button{font:inherit;background:var(--acc);color:#fff;border:0;border-radius:6px;padding:8px 16px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}button.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}.card{display:block;background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;color:inherit;text-decoration:none}.card:hover{border-color:var(--acc)}.card h3{margin:0 0 6px}
+table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line)}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}th{background:#eaf0f1}
+.login{max-width:360px;margin:12vh auto;background:#fff;padding:28px;border-radius:12px;border:1px solid var(--line)}.login label,main label{display:block;margin:12px 0}input[type=email],input[type=password],textarea{width:100%;font:inherit;padding:8px;border:1px solid var(--line);border-radius:6px;margin-top:4px}
+.bar{display:flex;gap:12px;margin:12px 0}.chk{display:flex!important;gap:8px;align-items:center}.desc{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px;max-width:80ch}
+</style></head><body><div id="app"></div><script>
+const $=s=>document.querySelector(s),app=$('#app');let me=null,view='projects',pollT=null;
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(p,o={}){const r=await fetch('/api/'+p,{method:o.method||(o.body?'POST':'GET'),headers:{'Content-Type':'application/json'},body:o.body?JSON.stringify(o.body):undefined});
+const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Request failed');return j}
+function watch(id,done,fail){clearInterval(pollT);pollT=setInterval(async()=>{try{const j=await api('jobs/'+id);if(j.status==='RUNNING')return;clearInterval(pollT);j.status==='DONE'?done(j):fail(j.error)}catch(x){clearInterval(pollT);fail(x.message)}},2000)}
+const rows=(ts,sp)=>ts.length?`<table><tr>${sp?'<th>Project</th>':''}<th>Task</th><th>Description</th><th>Owner</th><th>Due</th><th>Hours</th></tr>${ts.map(t=>`<tr>${sp?`<td>${esc(t.projectName)}</td>`:''}<td><b>${esc(t.title)}</b></td><td>${esc(t.description)}</td><td>${esc(t.assigneeName)}</td><td>${t.deadline}</td><td>${t.estimatedHours}</td></tr>`).join('')}</table>`:'<p class="mut">No tasks yet.</p>';
+async function init(){try{me=await api('me')}catch{me=null}me?shell():login()}
+function login(){app.innerHTML=`<div class="login"><h2>NovaWorks CRM</h2><form id="f"><label>Email<input id="e" type="email" required></label><label>Password<input id="p" type="password" required></label><p class="err" id="m"></p><button>Log in</button><p class="mut">Demo password for all accounts: Demo123!</p></form></div>`;
+$('#f').onsubmit=async ev=>{ev.preventDefault();try{me=await api('login',{body:{email:$('#e').value,password:$('#p').value}});shell()}catch(x){$('#m').textContent=x.message}}}
+function shell(){const A=me.role==='AGENT',tabs=[['projects','Projects'],A&&['mytasks','My tasks'],['team','Team'],me.role==='ADMIN'&&['create','Create from transcript']].filter(Boolean);
+app.innerHTML=`<header><b>NovaWorks CRM</b><nav id="nav">${tabs.map(([k,l])=>`<a href="#" data-k="${k}">${l}</a>`).join('')}</nav><span>${esc(me.name)} (${me.role.toLowerCase()})</span><button class="ghost" id="lo">Log out</button></header><main id="main"></main>`;
+$('#nav').onclick=e=>{const k=e.target.dataset.k;if(k){e.preventDefault();go(k)}};
+$('#lo').onclick=async()=>{await api('logout',{method:'POST'});me=null;clearInterval(pollT);login()};go(A?'mytasks':'projects')}
+function go(k,id){clearInterval(pollT);view=k;document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('on',a.dataset.k===k));({projects,mytasks,team,create,detail})[k](id)}
+async function projects(){const l=await api('projects');if(view!=='projects')return;
+$('#main').innerHTML=`<h2>Projects</h2>${l.length?`<div class="grid">${l.map(p=>`<a class="card" href="#" data-id="${p.id}"><h3>${esc(p.name)}</h3><p class="mut">Client: ${esc(p.clientName)}</p><p class="mut">Manager: ${esc(p.managerName)}</p><p>Due ${p.deadline}</p><p class="${p.generating?'note':'mut'}">${p.generating?'Generating tasks…':p.tasks.length+(p.tasks.length===1?' task':' tasks')}</p></a>`).join('')}</div>`:'<p class="mut">No projects yet.</p>'}`;
+$('#main').onclick=e=>{const c=e.target.closest('[data-id]');if(c){e.preventDefault();go('detail',c.dataset.id)}};
+if(l.some(p=>p.generating))pollT=setTimeout(projects,3000)}
+async function detail(id){let p;try{p=await api('projects/'+id)}catch(x){$('#main').innerHTML=`<p class="err">${esc(x.message)}</p>`;return}
+if(view!=='detail')return;p.tasks.forEach(t=>t.projectName=p.name);
+const gen=me.role==='MANAGER'&&p.managerId===me.id&&!p.tasks.length&&!p.generating;
+$('#main').innerHTML=`<a href="#" id="bk">Back to projects</a><h2>${esc(p.name)}</h2><p class="mut">Client: ${esc(p.clientName)}. Manager: ${esc(p.managerName)}. Deadline: ${p.deadline}</p><p class="desc">${esc(p.description)}</p><h3>Tasks</h3>${p.generating?'<p class="note">Generating tasks. This keeps running if you log out.</p>':''}${gen?'<button id="gen">Generate tasks</button>':''}<p id="m"></p>${rows(p.tasks)}`;
+$('#bk').onclick=e=>{e.preventDefault();go('projects')};
+if(gen)$('#gen').onclick=async()=>{const b=$('#gen');b.disabled=true;$('#m').className='note';$('#m').textContent='Generating tasks. This can take up to a minute.';
+try{const j=await api('projects/'+id+'/generate-tasks',{method:'POST'});watch(j.id,()=>detail(id),m=>{$('#m').className='err';$('#m').textContent=m;b.disabled=false})}catch(x){$('#m').className='err';$('#m').textContent=x.message;b.disabled=false}};
+if(p.generating)pollT=setTimeout(()=>detail(id),3000)}
+async function mytasks(){const l=await api('my-tasks');$('#main').innerHTML=`<h2>My tasks</h2>${rows(l,true)}`}
+async function team(){const l=await api('team');$('#main').innerHTML=`<h2>Team</h2><table><tr><th>Name</th><th>Role</th><th>Specialization</th></tr>${l.map(u=>`<tr><td>${esc(u.name)}</td><td>${u.role.toLowerCase()}</td><td>${esc(u.specialization)}</td></tr>`).join('')}</table>`}
+async function create(){$('#main').innerHTML=`<h2>Create from transcript</h2><textarea id="tx" rows="14" placeholder="Paste the meeting transcript"></textarea><label class="chk"><input type="checkbox" id="wt" checked> Also generate tasks now</label><div class="bar"><button id="go">Create from transcript</button><button class="ghost" id="rs">Reset demo data</button></div><p id="m"></p>`;
+const msg=(t,c)=>{$('#m').className=c;$('#m').textContent=t},busy=b=>{$('#go').disabled=b;$('#rs').disabled=b};
+const track=id=>{busy(true);msg('Working. This can take up to a minute. You can log out; the job keeps running.','note');
+watch(id,j=>{busy(false);msg(`Created ${j.result.projects} projects and ${j.result.tasks} tasks. Open Projects to view them.`,'ok')},e=>{busy(false);msg(e,'err')})};
+const a=await api('jobs/active');if(a)track(a.id);
+$('#go').onclick=async()=>{try{track((await api('admin/transcript-jobs',{body:{transcript:$('#tx').value,withTasks:$('#wt').checked}})).id)}catch(x){msg(x.message,'err')}};
+$('#rs').onclick=async()=>{if(confirm('Delete all projects and tasks? Users are kept.'))try{await api('admin/reset',{method:'POST'});msg('Demo data cleared.','ok')}catch(x){msg(x.message,'err')}}}
+init();
+</script></body></html>
